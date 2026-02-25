@@ -1,0 +1,234 @@
+{% extends "base.html" %}
+
+{% block title %}Calendário de Prazos - UECI{% endblock %}
+
+{% block extra_css %}
+<link href='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.css' rel='stylesheet' />
+<style>
+.fc {
+    max-width: 100%;
+    margin: 0 auto;
+}
+
+.fc-event {
+    cursor: pointer;
+    border-radius: 4px;
+    padding: 2px 5px;
+}
+
+.fc-event-vencido {
+    background-color: #dc3545 !important;
+    border-color: #dc3545 !important;
+    color: white !important;
+}
+
+.fc-event-hoje {
+    background-color: #ffc107 !important;
+    border-color: #ffc107 !important;
+    color: #000 !important;
+}
+
+.fc-event-proximo {
+    background-color: #0dcaf0 !important;
+    border-color: #0dcaf0 !important;
+    color: white !important;
+}
+
+.fc-event-futuro {
+    background-color: #198754 !important;
+    border-color: #198754 !important;
+    color: white !important;
+}
+
+.legenda-item {
+    display: inline-block;
+    margin-right: 20px;
+    margin-bottom: 10px;
+}
+
+.legenda-cor {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border-radius: 4px;
+    margin-right: 5px;
+    vertical-align: middle;
+}
+
+.fc-toolbar-title {
+    font-size: 1.5rem !important;
+    font-weight: 600 !important;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h2 class="mb-0">
+                <i class="bi bi-calendar-event me-2"></i>Calendário de Prazos
+            </h2>
+            <p class="text-muted">Visualização integrada de todos os prazos previstos de término</p>
+        </div>
+    </div>
+
+    <div class="row mb-3">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-header bg-white">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0"><i class="bi bi-info-circle me-2"></i>Legenda</h5>
+                        <div>
+                            <span class="legenda-item">
+                                <span class="legenda-cor" style="background-color: #dc3545;"></span>
+                                Vencido
+                            </span>
+                            <span class="legenda-item">
+                                <span class="legenda-cor" style="background-color: #ffc107;"></span>
+                                Vence Hoje
+                            </span>
+                            <span class="legenda-item">
+                                <span class="legenda-cor" style="background-color: #0dcaf0;"></span>
+                                Próximos 7 dias
+                            </span>
+                            <span class="legenda-item">
+                                <span class="legenda-cor" style="background-color: #198754;"></span>
+                                Futuro
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow">
+                <div class="card-body p-4">
+                    <div id="calendar"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Detalhes do Evento -->
+<div class="modal fade" id="eventoModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title"><i class="bi bi-calendar-check me-2"></i>Detalhes do Prazo</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="eventoDetalhes">
+                <!-- Preenchido via JavaScript -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                <a href="#" id="eventoLink" class="btn btn-primary">
+                    <i class="bi bi-eye"></i> Ver Registro
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<!-- jQuery DEVE vir primeiro -->
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js'></script>
+<script src='https://cdn.jsdelivr.net/npm/@fullcalendar/core@6.1.10/locales/pt-br.global.min.js'></script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('Calendário: Inicializando...'); // Debug
+
+    var calendarEl = document.getElementById('calendar');
+
+    if (!calendarEl) {
+        console.error('Elemento #calendar não encontrado!');
+        return;
+    }
+
+    var calendar = new FullCalendar.Calendar(calendarEl, {
+        initialView: 'dayGridMonth',
+        locale: 'pt-br',
+        headerToolbar: {
+            left: 'prev,next today',
+            center: 'title',
+            right: 'dayGridMonth,dayGridWeek,listMonth'
+        },
+        buttonText: {
+            today: 'Hoje',
+            month: 'Mês',
+            week: 'Semana',
+            list: 'Lista'
+        },
+        height: 'auto',
+        events: function(info, successCallback, failureCallback) {
+            console.log('Calendário: Buscando eventos...'); // Debug
+
+            fetch('/api/calendario/prazos')
+                .then(response => {
+                    console.log('Calendário: Resposta recebida:', response.status); // Debug
+                    return response.json();
+                })
+                .then(data => {
+                    console.log('Calendário: Dados recebidos:', data); // Debug
+                    if (data.success) {
+                        console.log('Calendário: Total de eventos:', data.eventos.length); // Debug
+                        successCallback(data.eventos);
+                    } else {
+                        console.error('Calendário: Falha ao carregar eventos');
+                        failureCallback();
+                    }
+                })
+                .catch(error => {
+                    console.error('Calendário: Erro ao carregar eventos:', error);
+                    failureCallback();
+                });
+        },
+        eventClick: function(info) {
+            console.log('Evento clicado:', info.event); // Debug
+
+            const evento = info.event;
+
+            let html = `
+                <div class="mb-3">
+                    <strong>Planilha:</strong> ${evento.extendedProps.aba_name}
+                </div>
+                <div class="mb-3">
+                    <strong>Descrição:</strong><br>
+                    ${evento.extendedProps.descricao}
+                </div>
+                <div class="mb-3">
+                    <strong>Data Prevista:</strong> ${evento.extendedProps.data_formatada}
+                </div>
+                <div class="mb-3">
+                    <strong>Status:</strong>
+                    <span class="badge bg-${evento.extendedProps.badge_color}">
+                        ${evento.extendedProps.status_texto}
+                    </span>
+                </div>
+            `;
+
+            document.getElementById('eventoDetalhes').innerHTML = html;
+            document.getElementById('eventoLink').href = `/planilha/${encodeURIComponent(evento.extendedProps.aba_name)}`;
+
+            var modal = new bootstrap.Modal(document.getElementById('eventoModal'));
+            modal.show();
+        },
+        eventDidMount: function(info) {
+            // Adicionar tooltip
+            info.el.title = info.event.extendedProps.descricao;
+        }
+    });
+
+    calendar.render();
+    console.log('Calendário renderizado com sucesso!'); // Debug
+});
+</script>
+{% endblock %}

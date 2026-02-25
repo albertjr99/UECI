@@ -1,0 +1,368 @@
+{% extends "base.html" %}
+
+{% block title %}Gerenciar Listas Suspensas - UECI{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h2 class="mb-0">
+                <i class="bi bi-list-ul"></i> Gerenciar Listas Suspensas (Dropdowns)
+            </h2>
+            <p class="text-muted">Configure as opções disponíveis nos campos de seleção das planilhas</p>
+        </div>
+    </div>
+    
+    <!-- Abas das Planilhas -->
+    <ul class="nav nav-tabs mb-4" id="abasTabs" role="tablist">
+        {% for aba in abas %}
+        <li class="nav-item" role="presentation">
+            <button class="nav-link {% if loop.first %}active{% endif %}" 
+                    id="tab-{{ loop.index }}" 
+                    data-bs-toggle="tab" 
+                    data-bs-target="#content-{{ loop.index }}" 
+                    data-aba-name="{{ aba.aba_name }}"
+                    type="button" 
+                    role="tab">
+                <i class="bi bi-file-earmark-spreadsheet"></i> {{ aba.aba_name }}
+            </button>
+        </li>
+        {% endfor %}
+    </ul>
+    
+    <div class="tab-content" id="abasContent">
+        {% for aba in abas %}
+        <div class="tab-pane fade {% if loop.first %}show active{% endif %}" 
+             id="content-{{ loop.index }}" 
+             role="tabpanel">
+            
+            <!-- Botão Adicionar Dropdown -->
+            <div class="mb-3">
+                <button class="btn btn-success" onclick="mostrarModalNovoDropdown('{{ aba.aba_name }}')">
+                    <i class="bi bi-plus-circle"></i> Adicionar Nova Lista Suspensa
+                </button>
+            </div>
+            
+            <!-- Lista de Dropdowns -->
+            <div class="row" id="dropdowns-{{ aba.aba_name|replace(' ', '_')|replace('-', '_') }}">
+                {% if aba.aba_name in dropdowns_por_aba %}
+                    {% for dropdown in dropdowns_por_aba[aba.aba_name] %}
+                    <div class="col-lg-6 mb-3" id="dropdown-card-{{ dropdown.id }}">
+                        <div class="card shadow-sm">
+                            <div class="card-header d-flex justify-content-between align-items-center {% if dropdown.is_active %}bg-success text-white{% else %}bg-secondary text-white{% endif %}">
+                                <h6 class="mb-0">
+                                    <i class="bi bi-tag"></i> {{ dropdown.campo_nome }}
+                                </h6>
+                                <div class="btn-group btn-group-sm">
+                                    <button class="btn btn-sm {% if dropdown.is_active %}btn-light{% else %}btn-outline-light{% endif %}" 
+                                            onclick="toggleDropdown({{ dropdown.id }})"
+                                            title="{% if dropdown.is_active %}Desativar{% else %}Ativar{% endif %}">
+                                        <i class="bi bi-{% if dropdown.is_active %}toggle-on{% else %}toggle-off{% endif %}"></i>
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-light btn-editar-dropdown" 
+                                            data-dropdown-id="{{ dropdown.id }}"
+                                            data-campo-nome="{{ dropdown.campo_nome|e }}"
+                                            title="Editar">
+                                        <i class="bi bi-pencil"></i>
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-light" 
+                                            onclick="excluirDropdown({{ dropdown.id }})"
+                                            title="Excluir">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </div>
+                                <!-- Armazenar opções em elemento oculto -->
+                                <script type="application/json" id="dropdown-opcoes-{{ dropdown.id }}">
+                                    {{ dropdown.get_opcoes()|tojson|safe }}
+                                </script>
+                            </div>
+                            <div class="card-body">
+                                <div class="mb-2">
+                                    <strong>Status:</strong> 
+                                    <span class="badge {% if dropdown.is_active %}bg-success{% else %}bg-secondary{% endif %}">
+                                        {% if dropdown.is_active %}Ativo{% else %}Inativo{% endif %}
+                                    </span>
+                                </div>
+                                <div>
+                                    <strong>Opções ({{ dropdown.get_opcoes()|length }}):</strong>
+                                    <ul class="list-group list-group-flush mt-2">
+                                        {% for opcao in dropdown.get_opcoes()[:5] %}
+                                        <li class="list-group-item py-1 px-2 small">{{ opcao }}</li>
+                                        {% endfor %}
+                                        {% if dropdown.get_opcoes()|length > 5 %}
+                                        <li class="list-group-item py-1 px-2 small text-muted">
+                                            ... e mais {{ dropdown.get_opcoes()|length - 5 }} opções
+                                        </li>
+                                        {% endif %}
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="col-12">
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle"></i> Nenhuma lista suspensa configurada para esta planilha.
+                            Clique em "Adicionar Nova Lista Suspensa" para começar.
+                        </div>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- Modal: Novo Dropdown -->
+<div class="modal fade" id="modalNovoDropdown" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title"><i class="bi bi-plus-circle"></i> Nova Lista Suspensa</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Planilha</label>
+                    <input type="text" class="form-control" id="novoAbaName" readonly>
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Campo <span class="text-danger">*</span></label>
+                    <select class="form-select" id="novoCampoNome" required>
+                        <option value="">Carregando campos...</option>
+                    </select>
+                    <small class="text-muted">Selecione o campo que terá a lista suspensa</small>
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Opções <span class="text-danger">*</span></label>
+                    <textarea class="form-control" id="novasOpcoes" rows="8" 
+                              placeholder="Digite uma opção por linha. Exemplo:&#10;Opção 1&#10;Opção 2&#10;Opção 3"></textarea>
+                    <small class="text-muted">Uma opção por linha</small>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-success" onclick="salvarNovoDropdown()">
+                    <i class="bi bi-save"></i> Criar Lista
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Editar Dropdown -->
+<div class="modal fade" id="modalEditarDropdown" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title"><i class="bi bi-pencil"></i> Editar Lista Suspensa</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="editDropdownId">
+                
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Campo</label>
+                    <input type="text" class="form-control" id="editCampoNome" readonly>
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Opções <span class="text-danger">*</span></label>
+                    <textarea class="form-control" id="editOpcoes" rows="10" 
+                              placeholder="Digite uma opção por linha"></textarea>
+                    <small class="text-muted">Uma opção por linha</small>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" onclick="salvarEdicaoDropdown()">
+                    <i class="bi bi-save"></i> Salvar Alterações
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let modalNovoDropdown = null;
+let modalEditarDropdown = null;
+let abaAtualNovo = '';
+
+document.addEventListener('DOMContentLoaded', function() {
+    modalNovoDropdown = new bootstrap.Modal(document.getElementById('modalNovoDropdown'));
+    modalEditarDropdown = new bootstrap.Modal(document.getElementById('modalEditarDropdown'));
+    
+    // Event listener para os botões de editar
+    document.querySelectorAll('.btn-editar-dropdown').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const id = this.getAttribute('data-dropdown-id');
+            const campoNome = this.getAttribute('data-campo-nome');
+            
+            // Buscar opções do elemento JSON oculto
+            const opcoesElement = document.getElementById('dropdown-opcoes-' + id);
+            const opcoes = JSON.parse(opcoesElement.textContent);
+            
+            editarDropdown(id, campoNome, opcoes);
+        });
+    });
+});
+
+function mostrarModalNovoDropdown(abaName) {
+    abaAtualNovo = abaName;
+    document.getElementById('novoAbaName').value = abaName;
+    document.getElementById('novoCampoNome').innerHTML = '<option value="">Carregando...</option>';
+    document.getElementById('novasOpcoes').value = '';
+    
+    // Carregar campos da aba
+    fetch(`/configuracoes/dropdowns/campos/${encodeURIComponent(abaName)}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const select = document.getElementById('novoCampoNome');
+                select.innerHTML = '<option value="">Selecione um campo...</option>';
+                data.campos.forEach(campo => {
+                    const option = document.createElement('option');
+                    option.value = campo;
+                    option.textContent = campo;
+                    select.appendChild(option);
+                });
+            }
+        });
+    
+    modalNovoDropdown.show();
+}
+
+function salvarNovoDropdown() {
+    const abaName = document.getElementById('novoAbaName').value;
+    const campoNome = document.getElementById('novoCampoNome').value;
+    const opcoesText = document.getElementById('novasOpcoes').value;
+    
+    if (!campoNome) {
+        alert('Selecione um campo');
+        return;
+    }
+    
+    if (!opcoesText.trim()) {
+        alert('Digite pelo menos uma opção');
+        return;
+    }
+    
+    const opcoes = opcoesText.split('\n').map(o => o.trim()).filter(o => o.length > 0);
+    
+    fetch('/configuracoes/dropdowns/criar', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            aba_name: abaName,
+            campo_nome: campoNome,
+            opcoes: opcoes
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            modalNovoDropdown.hide();
+            location.reload();
+        } else {
+            alert('Erro: ' + data.message);
+        }
+    })
+    .catch(error => {
+        alert('Erro ao criar dropdown: ' + error);
+    });
+}
+
+function editarDropdown(id, campoNome, opcoes) {
+    document.getElementById('editDropdownId').value = id;
+    document.getElementById('editCampoNome').value = campoNome;
+    document.getElementById('editOpcoes').value = opcoes.join('\n');
+    
+    modalEditarDropdown.show();
+}
+
+function salvarEdicaoDropdown() {
+    const id = document.getElementById('editDropdownId').value;
+    const opcoesText = document.getElementById('editOpcoes').value;
+    
+    if (!opcoesText.trim()) {
+        alert('Digite pelo menos uma opção');
+        return;
+    }
+    
+    const opcoes = opcoesText.split('\n').map(o => o.trim()).filter(o => o.length > 0);
+    
+    fetch(`/configuracoes/dropdowns/editar/${id}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            opcoes: opcoes
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            modalEditarDropdown.hide();
+            location.reload();
+        } else {
+            alert('Erro: ' + data.message);
+        }
+    })
+    .catch(error => {
+        alert('Erro ao editar dropdown: ' + error);
+    });
+}
+
+function toggleDropdown(id) {
+    if (!confirm('Deseja alterar o status deste dropdown?')) {
+        return;
+    }
+    
+    fetch(`/configuracoes/dropdowns/toggle/${id}`, {
+        method: 'POST',
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            location.reload();
+        } else {
+            alert('Erro: ' + data.message);
+        }
+    })
+    .catch(error => {
+        alert('Erro ao alterar status: ' + error);
+    });
+}
+
+function excluirDropdown(id) {
+    if (!confirm('Tem certeza que deseja excluir este dropdown? Esta ação não pode ser desfeita.')) {
+        return;
+    }
+    
+    fetch(`/configuracoes/dropdowns/excluir/${id}`, {
+        method: 'POST',
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            document.getElementById('dropdown-card-' + id).remove();
+        } else {
+            alert('Erro: ' + data.message);
+        }
+    })
+    .catch(error => {
+        alert('Erro ao excluir dropdown: ' + error);
+    });
+}
+</script>
+{% endblock %}

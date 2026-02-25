@@ -1,0 +1,656 @@
+{% extends "base.html" %}
+
+{% block title %}Analytics - UECI{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h1 class="display-5">
+                <i class="bi bi-graph-up"></i> Dashboard Gerencial
+            </h1>
+            <p class="text-muted">Análises e Indicadores de Desempenho</p>
+        </div>
+    </div>
+
+    <!-- Seleção de Aba -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card shadow">
+                <div class="card-body">
+                    <label class="form-label fw-semibold">Selecione a Planilha para Análise</label>
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="bi bi-file-earmark-spreadsheet"></i></span>
+                        <select class="form-select" id="abaSelect">
+                            <option value="">Selecione uma planilha...</option>
+                            {% for aba in abas %}
+                            <option value="{{ aba.aba_name }}">{{ aba.aba_name }}</option>
+                            {% endfor %}
+                        </select>
+                        <button class="btn btn-primary" onclick="loadAnalytics()">
+                            <i class="bi bi-search"></i> Carregar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card shadow">
+                <div class="card-body">
+                    <label class="form-label fw-semibold">Exportar Relatório Executivo</label>
+                    <button class="btn btn-success w-100" id="exportBtn" onclick="exportReport()" disabled>
+                        <i class="bi bi-file-earmark-pdf"></i> Gerar Relatório em PDF
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- KPIs -->
+    <div id="kpisSection" style="display: none;">
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="card shadow-sm border-primary">
+                    <div class="card-body text-center">
+                        <i class="bi bi-file-text fs-1 text-primary"></i>
+                        <h3 class="mt-2 mb-0" id="kpi-total">0</h3>
+                        <p class="text-muted mb-0">Total de Recomendações</p>
+                    </div>
+                </div>
+            </div>
+                <div class="col-md-3">
+                     <div class="card shadow-sm border-success">
+                        <div class="card-body text-center">
+                          <i class="bi bi-check-circle fs-1 text-success"></i>
+                          <h3 class="mt-2 mb-0" id="kpi-cumpridas">0</h3>
+                          <p class="text-muted mb-0">Cumpridas</p>
+                     </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card shadow-sm border-danger">
+                    <div class="card-body text-center">
+                        <i class="bi bi-x-circle fs-1 text-danger"></i>
+                        <h3 class="mt-2 mb-0" id="kpi-nao-cumpridas">0</h3>
+                        <p class="text-muted mb-0">Não Cumpridas</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card shadow-sm border-warning">
+                    <div class="card-body text-center">
+                        <i class="bi bi-clock-history fs-1 text-warning"></i>
+                        <h3 class="mt-2 mb-0" id="kpi-andamento">0</h3>
+                        <p class="text-muted mb-0">Em Andamento</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+<div class="row mb-4">
+    <div class="col-12 text-center">
+        <h4 class="text-success">Taxa de Cumprimento: <span id="kpi-taxa">0%</span></h4>
+    </div>
+</div>
+    <!-- Loading -->
+    <div id="loading" style="display: none;" class="text-center my-5">
+        <div class="spinner-border text-primary" style="width: 3rem; height: 3rem;" role="status">
+            <span class="visually-hidden">Carregando...</span>
+        </div>
+        <p class="mt-3 text-muted">Gerando análises...</p>
+    </div>
+
+    <!-- Gráficos -->
+    <div id="chartsSection" style="display: none;">
+        <div class="row">
+            <!-- Status Consolidado -->
+            <div class="col-md-6 mb-4">
+                <div class="card shadow">
+                    <div class="card-header bg-gradient" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+                        <h5 class="mb-0"><i class="bi bi-pie-chart"></i> Status das Recomendações</h5>
+                    </div>
+                    <div class="card-body" style="height: 400px;">
+                        <canvas id="chart-status-consolidado"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Status Detalhado -->
+            <div class="col-md-6 mb-4">
+                <div class="card shadow">
+                    <div class="card-header bg-gradient" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+                        <h5 class="mb-0"><i class="bi bi-bar-chart"></i> Distribuição Detalhada</h5>
+                    </div>
+                    <div class="card-body" style="height: 400px;">
+                        <canvas id="chart-status-detalhado"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Por Setor -->
+            <div class="col-md-6 mb-4">
+                <div class="card shadow">
+                    <div class="card-header bg-gradient" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+                        <h5 class="mb-0"><i class="bi bi-building"></i> Por Setor Responsável</h5>
+                    </div>
+                    <div class="card-body" style="height: 400px;">
+                        <canvas id="chart-por-setor"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Por UG -->
+            <div class="col-md-6 mb-4">
+                <div class="card shadow">
+                    <div class="card-header bg-gradient" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+                        <h5 class="mb-0"><i class="bi bi-diagram-3"></i> Por Unidade Gestora</h5>
+                    </div>
+                    <div class="card-body" style="height: 400px;">
+                        <canvas id="chart-por-ug"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Por Origem -->
+            <div class="col-md-6 mb-4">
+                <div class="card shadow">
+                    <div class="card-header bg-gradient" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+                        <h5 class="mb-0"><i class="bi bi-folder"></i> Por Origem</h5>
+                    </div>
+                    <div class="card-body" style="height: 400px;">
+                        <canvas id="chart-por-origem"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Por Tipo -->
+            <div class="col-md-6 mb-4">
+                <div class="card shadow">
+                    <div class="card-header bg-gradient" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+                        <h5 class="mb-0"><i class="bi bi-tag"></i> Por Tipo de Ação</h5>
+                    </div>
+                    <div class="card-body" style="height: 400px;">
+                        <canvas id="chart-por-tipo"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Situação de Prazos -->
+            <div class="col-md-12 mb-4">
+                <div class="card shadow">
+                    <div class="card-header bg-gradient" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+                        <h5 class="mb-0"><i class="bi bi-calendar-check"></i> Situação de Prazos</h5>
+                    </div>
+                    <div class="card-body" style="height: 400px;">
+                        <canvas id="chart-situacao-prazos"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Mensagem quando não há dados -->
+    <div id="noDataMessage" style="display: none;" class="alert alert-info text-center">
+        <i class="bi bi-info-circle fs-1"></i>
+        <p class="mt-3 mb-0">Selecione uma planilha para visualizar as análises</p>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+<script>
+let currentAba = '';
+let charts = {};
+
+function loadAnalytics() {
+    const abaName = document.getElementById('abaSelect').value;
+
+    if (!abaName) {
+        alert('Selecione uma planilha');
+        return;
+    }
+
+    currentAba = abaName;
+
+    document.getElementById('loading').style.display = 'block';
+    document.getElementById('chartsSection').style.display = 'none';
+    document.getElementById('kpisSection').style.display = 'none';
+    document.getElementById('noDataMessage').style.display = 'none';
+    document.getElementById('exportBtn').disabled = true;
+
+    Object.values(charts).forEach(chart => chart.destroy());
+    charts = {};
+
+    fetch(`/analytics/data/${encodeURIComponent(abaName)}`)
+        .then(response => response.json())
+        .then(data => {
+            document.getElementById('loading').style.display = 'none';
+
+            if (data.total_registros === 0) {
+                alert('Sem dados para esta planilha');
+                return;
+            }
+
+            document.getElementById('kpi-total').textContent = data.kpis.total_registros || 0;
+            document.getElementById('kpi-cumpridas').textContent = data.kpis.cumpridas || 0;
+            document.getElementById('kpi-nao-cumpridas').textContent = data.kpis.nao_cumpridas || 0;
+            document.getElementById('kpi-andamento').textContent = data.kpis.em_andamento || 0;
+            document.getElementById('kpi-taxa').textContent = (data.kpis.taxa_cumprimento || 0) + '%';
+
+            document.getElementById('kpisSection').style.display = 'block';
+            document.getElementById('chartsSection').style.display = 'block';
+            document.getElementById('exportBtn').disabled = false;
+
+            // Status Consolidado
+            if (data.charts.status_consolidado) {
+                const ctx = document.getElementById('chart-status-consolidado');
+                const total = data.charts.status_consolidado.data.reduce((a, b) => a + b, 0);
+
+                charts.statusConsolidado = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: data.charts.status_consolidado.labels,
+                        datasets: [{
+                            data: data.charts.status_consolidado.data,
+                            backgroundColor: data.charts.status_consolidado.colors,
+                            borderWidth: 2,
+                            borderColor: '#fff'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: 'Status Consolidado das Recomendações',
+                                font: { size: 16, weight: 'bold' },
+                                padding: 20
+                            },
+                            legend: {
+                                position: 'bottom',
+                                labels: { padding: 15, font: { size: 12 } }
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        const percentage = ((context.parsed / total) * 100).toFixed(1);
+                                        return context.label + ': ' + context.parsed + ' (' + percentage + '%)';
+                                    }
+                                }
+                            },
+                            datalabels: {
+                                display: true,
+                                color: '#fff',
+                                font: { weight: 'bold', size: 14 },
+                                formatter: (value) => {
+                                    const percentage = ((value / total) * 100).toFixed(1);
+                                    return value + '\n(' + percentage + '%)';
+                                }
+                            }
+                        }
+                    },
+                    plugins: [ChartDataLabels]
+                });
+            }
+
+            // Status Detalhado
+            if (data.charts.status_detalhado) {
+                const ctx = document.getElementById('chart-status-detalhado');
+                const total = data.charts.status_detalhado.data.reduce((a, b) => a + b, 0);
+
+                charts.statusDetalhado = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: data.charts.status_detalhado.labels,
+                        datasets: [{
+                            label: 'Quantidade',
+                            data: data.charts.status_detalhado.data,
+                            backgroundColor: 'rgba(102, 126, 234, 0.8)',
+                            borderColor: 'rgb(102, 126, 234)',
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        indexAxis: 'y',
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: 'Distribuição Detalhada por Status',
+                                font: { size: 16, weight: 'bold' },
+                                padding: 20
+                            },
+                            legend: { display: false },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        const percentage = ((context.parsed.x / total) * 100).toFixed(1);
+                                        return 'Quantidade: ' + context.parsed.x + ' (' + percentage + '%)';
+                                    }
+                                }
+                            },
+                            datalabels: {
+                                display: true,
+                                anchor: 'end',
+                                align: 'right',
+                                color: '#333',
+                                font: { weight: 'bold', size: 11 },
+                                formatter: (value) => {
+                                    const percentage = ((value / total) * 100).toFixed(1);
+                                    return value + ' (' + percentage + '%)';
+                                }
+                            }
+                        },
+                        scales: {
+                            x: { beginAtZero: true, ticks: { stepSize: 1 } }
+                        }
+                    },
+                    plugins: [ChartDataLabels]
+                });
+            }
+
+            // Por Setor
+            if (data.charts.por_setor) {
+                const ctx = document.getElementById('chart-por-setor');
+                const total = data.charts.por_setor.data.reduce((a, b) => a + b, 0);
+
+                charts.porSetor = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: data.charts.por_setor.labels,
+                        datasets: [{
+                            label: 'Recomendações',
+                            data: data.charts.por_setor.data,
+                            backgroundColor: 'rgba(16, 185, 129, 0.8)',
+                            borderColor: 'rgb(16, 185, 129)',
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: 'Recomendações por Setor Responsável',
+                                font: { size: 16, weight: 'bold' },
+                                padding: 20
+                            },
+                            legend: { display: false },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        const percentage = ((context.parsed.y / total) * 100).toFixed(1);
+                                        return 'Quantidade: ' + context.parsed.y + ' (' + percentage + '%)';
+                                    }
+                                }
+                            },
+                            datalabels: {
+                                display: true,
+                                anchor: 'end',
+                                align: 'top',
+                                color: '#333',
+                                font: { weight: 'bold', size: 12 },
+                                formatter: (value) => {
+                                    const percentage = ((value / total) * 100).toFixed(1);
+                                    return value + ' (' + percentage + '%)';
+                                }
+                            }
+                        },
+                        scales: {
+                            y: { beginAtZero: true, ticks: { stepSize: 1 } }
+                        }
+                    },
+                    plugins: [ChartDataLabels]
+                });
+            }
+
+            // Por UG
+            if (data.charts.por_ug) {
+                const ctx = document.getElementById('chart-por-ug');
+                const total = data.charts.por_ug.data.reduce((a, b) => a + b, 0);
+
+                charts.porUG = new Chart(ctx, {
+                    type: 'pie',
+                    data: {
+                        labels: data.charts.por_ug.labels,
+                        datasets: [{
+                            data: data.charts.por_ug.data,
+                            backgroundColor: [
+                                'rgba(59, 130, 246, 0.8)',
+                                'rgba(245, 158, 11, 0.8)',
+                                'rgba(239, 68, 68, 0.8)',
+                                'rgba(16, 185, 129, 0.8)',
+                                'rgba(139, 92, 246, 0.8)'
+                            ],
+                            borderWidth: 2,
+                            borderColor: '#fff'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: 'Distribuição por Unidade Gestora',
+                                font: { size: 16, weight: 'bold' },
+                                padding: 20
+                            },
+                            legend: {
+                                position: 'bottom',
+                                labels: { padding: 15, font: { size: 11 } }
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        const percentage = ((context.parsed / total) * 100).toFixed(1);
+                                        return context.label + ': ' + context.parsed + ' (' + percentage + '%)';
+                                    }
+                                }
+                            },
+                            datalabels: {
+                                display: true,
+                                color: '#fff',
+                                font: { weight: 'bold', size: 13 },
+                                formatter: (value) => {
+                                    const percentage = ((value / total) * 100).toFixed(1);
+                                    return value + '\n(' + percentage + '%)';
+                                }
+                            }
+                        }
+                    },
+                    plugins: [ChartDataLabels]
+                });
+            }
+
+            // Por Origem
+            if (data.charts.por_origem) {
+                const ctx = document.getElementById('chart-por-origem');
+                const total = data.charts.por_origem.data.reduce((a, b) => a + b, 0);
+
+                charts.porOrigem = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: data.charts.por_origem.labels,
+                        datasets: [{
+                            data: data.charts.por_origem.data,
+                            backgroundColor: [
+                                'rgba(239, 68, 68, 0.8)',
+                                'rgba(245, 158, 11, 0.8)',
+                                'rgba(16, 185, 129, 0.8)',
+                                'rgba(59, 130, 246, 0.8)'
+                            ],
+                            borderWidth: 2,
+                            borderColor: '#fff'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: 'Distribuição por Origem',
+                                font: { size: 16, weight: 'bold' },
+                                padding: 20
+                            },
+                            legend: {
+                                position: 'bottom',
+                                labels: { padding: 15, font: { size: 12 } }
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        const percentage = ((context.parsed / total) * 100).toFixed(1);
+                                        return context.label + ': ' + context.parsed + ' (' + percentage + '%)';
+                                    }
+                                }
+                            },
+                            datalabels: {
+                                display: true,
+                                color: '#fff',
+                                font: { weight: 'bold', size: 14 },
+                                formatter: (value) => {
+                                    const percentage = ((value / total) * 100).toFixed(1);
+                                    return value + '\n(' + percentage + '%)';
+                                }
+                            }
+                        }
+                    },
+                    plugins: [ChartDataLabels]
+                });
+            }
+
+            // Por Tipo
+            if (data.charts.por_tipo) {
+                const ctx = document.getElementById('chart-por-tipo');
+                const total = data.charts.por_tipo.data.reduce((a, b) => a + b, 0);
+
+                charts.porTipo = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: data.charts.por_tipo.labels,
+                        datasets: [{
+                            label: 'Quantidade',
+                            data: data.charts.por_tipo.data,
+                            backgroundColor: 'rgba(245, 158, 11, 0.8)',
+                            borderColor: 'rgb(245, 158, 11)',
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: 'Recomendações por Tipo de Ação',
+                                font: { size: 16, weight: 'bold' },
+                                padding: 20
+                            },
+                            legend: { display: false },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        const percentage = ((context.parsed.y / total) * 100).toFixed(1);
+                                        return 'Quantidade: ' + context.parsed.y + ' (' + percentage + '%)';
+                                    }
+                                }
+                            },
+                            datalabels: {
+                                display: true,
+                                anchor: 'end',
+                                align: 'top',
+                                color: '#333',
+                                font: { weight: 'bold', size: 14 },
+                                formatter: (value) => {
+                                    const percentage = ((value / total) * 100).toFixed(1);
+                                    return value + ' (' + percentage + '%)';
+                                }
+                            }
+                        },
+                        scales: {
+                            y: { beginAtZero: true, ticks: { stepSize: 1 } }
+                        }
+                    },
+                    plugins: [ChartDataLabels]
+                });
+            }
+
+            // Situação de Prazos
+            if (data.charts.situacao_prazos) {
+                const ctx = document.getElementById('chart-situacao-prazos');
+                const total = data.charts.situacao_prazos.data.reduce((a, b) => a + b, 0);
+
+                charts.situacaoPrazos = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: data.charts.situacao_prazos.labels,
+                        datasets: [{
+                            label: 'Quantidade',
+                            data: data.charts.situacao_prazos.data,
+                            backgroundColor: data.charts.situacao_prazos.colors,
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: 'Situação de Prazos',
+                                font: { size: 16, weight: 'bold' },
+                                padding: 20
+                            },
+                            legend: { display: false },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        const percentage = ((context.parsed.y / total) * 100).toFixed(1);
+                                        return 'Quantidade: ' + context.parsed.y + ' (' + percentage + '%)';
+                                    }
+                                }
+                            },
+                            datalabels: {
+                                display: true,
+                                anchor: 'end',
+                                align: 'top',
+                                color: '#333',
+                                font: { weight: 'bold', size: 14 },
+                                formatter: (value) => {
+                                    const percentage = ((value / total) * 100).toFixed(1);
+                                    return value + ' (' + percentage + '%)';
+                                }
+                            }
+                        },
+                        scales: {
+                            y: { beginAtZero: true, ticks: { stepSize: 1 } }
+                        }
+                    },
+                    plugins: [ChartDataLabels]
+                });
+            }
+        })
+        .catch(error => {
+            document.getElementById('loading').style.display = 'none';
+            alert('Erro ao carregar dados: ' + error);
+        });
+}
+
+function exportReport() {
+    if (!currentAba) {
+        alert('Selecione uma planilha primeiro');
+        return;
+    }
+
+    window.location.href = `/analytics/export/${encodeURIComponent(currentAba)}`;
+}
+</script>
+{% endblock %}
+

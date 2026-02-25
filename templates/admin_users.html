@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+
+{% block title %}Gerenciar Usuários - UECI{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h1 class="display-6">
+                <i class="bi bi-people"></i> Gerenciar Usuários
+            </h1>
+        </div>
+    </div>
+    
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow">
+                <div class="card-body">
+                    <table class="table table-hover">
+                        <thead class="table-primary">
+                            <tr>
+                                <th>ID</th>
+                                <th>Usuário</th>
+                                <th>Email</th>
+                                <th>Telefone</th>
+                                <th>Admin</th>
+                                <th>Status</th>
+                                <th>Último Login</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for user in users %}
+                            <tr>
+                                <td>{{ user.id }}</td>
+                                <td>{{ user.username }}</td>
+                                <td>{{ user.email }}</td>
+                                <td>{{ user.phone or '-' }}</td>
+                                <td>
+                                    {% if user.is_admin %}
+                                    <span class="badge bg-danger">Admin</span>
+                                    {% else %}
+                                    <span class="badge bg-secondary">Usuário</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if user.is_active %}
+                                    <span class="badge bg-success">Ativo</span>
+                                    {% else %}
+                                    <span class="badge bg-warning">Inativo</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ user.last_login.strftime('%d/%m/%Y %H:%M') if user.last_login else 'Nunca' }}</td>
+                                <td>
+                                    <button class="btn btn-sm btn-primary" onclick="generateToken({{ user.id }}, 'email')">
+                                        <i class="bi bi-envelope"></i> Token Email
+                                    </button>
+                                    <button class="btn btn-sm btn-success" onclick="generateToken({{ user.id }}, 'whatsapp')">
+                                        <i class="bi bi-whatsapp"></i> Token WhatsApp
+                                    </button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para exibir token -->
+<div class="modal fade" id="tokenModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title">Token Gerado</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Token gerado com sucesso! Envie este link para o usuário:</p>
+                <div class="alert alert-info">
+                    <strong>Link:</strong><br>
+                    <input type="text" class="form-control mt-2" id="tokenLink" readonly>
+                </div>
+                <p class="mb-0"><small>Este token expira em 24 horas.</small></p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                <button type="button" class="btn btn-primary" onclick="copyToken()">
+                    <i class="bi bi-clipboard"></i> Copiar Link
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function generateToken(userId, method) {
+    $.ajax({
+        url: '/admin/generate-token',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({
+            user_id: userId,
+            token_type: 'password_reset',
+            send_method: method
+        }),
+        success: function(response) {
+            $('#tokenLink').val(response.link);
+            $('#tokenModal').modal('show');
+            
+            // Aqui você pode integrar com APIs de email ou WhatsApp
+            if (method === 'whatsapp' && response.user_phone) {
+                const whatsappMsg = `Olá! Use este link para definir sua senha: ${response.link}`;
+                const whatsappUrl = `https://wa.me/${response.user_phone.replace(/\D/g, '')}?text=${encodeURIComponent(whatsappMsg)}`;
+                window.open(whatsappUrl, '_blank');
+            }
+        },
+        error: function() {
+            alert('Erro ao gerar token!');
+        }
+    });
+}
+
+function copyToken() {
+    const tokenLink = $('#tokenLink');
+    tokenLink.select();
+    document.execCommand('copy');
+    alert('Link copiado para a área de transferência!');
+}
+</script>
+{% endblock %}

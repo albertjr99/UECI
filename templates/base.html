@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=0.8">
+    <title>{% block title %}UECI - Monitoramento{% endblock %}</title>
+
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <!-- Custom CSS (se existir) -->
+    {% if url_for('static', filename='css/style.css', _external=False) %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    {% endif %}
+
+    <style>
+        body {
+            zoom: 80%;
+            -moz-transform: scale(0.8);
+            -moz-transform-origin: 0 0;
+        }
+    </style>
+
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <!-- Incluir alertas apenas UMA vez -->
+    {% if current_user.is_authenticated %}
+        {% include 'components/alertas.html' %}
+    {% endif %}
+
+    {% if current_user.is_authenticated %}
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-dark" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+        <div class="container-fluid">
+            <a class="navbar-brand fw-bold" href="{{ url_for('main.index') }}">
+                <i class="bi bi-shield-check me-2"></i>UECI - Controle Interno - IPAJM
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="planilhasDropdown" role="button" data-bs-toggle="dropdown">
+                            <i class="bi bi-file-earmark-spreadsheet me-1"></i>Planilhas
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="{{ url_for('main.view_planilha', aba_name='Plano de Ação - UECI') }}">
+                                <i class="bi bi-clipboard-data me-2"></i>Plano de Ação - UECI
+                            </a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('main.view_planilha', aba_name='Plano de Ação - SECONT') }}">
+                                <i class="bi bi-clipboard-check me-2"></i>Plano de Ação - SECONT
+                            </a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('main.view_planilha', aba_name='Plano de Ação - TCEES') }}">
+                                <i class="bi bi-clipboard-plus me-2"></i>Plano de Ação - TCEES
+                            </a></li>
+                        </ul>
+                    </li>
+
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('analytics.analytics_dashboard') }}">
+                            <i class="bi bi-bar-chart-line me-1"></i>Analytics
+                        </a>
+                    </li>
+
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('main.calendario') }}">
+                            <i class="bi bi-calendar-event me-1"></i>Calendário
+                        </a>
+                    </li>
+
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="configDropdown" role="button" data-bs-toggle="dropdown">
+                            <i class="bi bi-gear me-1"></i>Configurações
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="{{ url_for('configuracoes.zoom_config') }}">
+                                <i class="bi bi-zoom-in me-2"></i>Ajustar Zoom
+                            </a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('configuracoes.dropdowns_config') }}">
+                                <i class="bi bi-list-ul me-2"></i>Listas Suspensas
+                            </a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('configuracoes.colunas_config') }}">
+                                <i class="bi bi-columns-gap me-2"></i>Editar Colunas
+                            </a></li>
+                        </ul>
+                    </li>
+
+                    {% if current_user.is_admin %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('main.admin_users') }}">
+                            <i class="bi bi-people me-1"></i>Usuários
+                        </a>
+                    </li>
+                    {% endif %}
+                </ul>
+                <ul class="navbar-nav">
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown">
+                            <i class="bi bi-person-circle me-1"></i>{{ current_user.username }}
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li><a class="dropdown-item" href="{{ url_for('auth.logout') }}">
+                                <i class="bi bi-box-arrow-right me-2"></i>Sair
+                            </a></li>
+                        </ul>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+    {% endif %}
+
+    <!-- Flash Messages -->
+    <div class="container mt-3">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+    </div>
+
+    <!-- Main Content -->
+    <main class="{% if current_user.is_authenticated %}container-fluid mt-4{% endif %}">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer mt-5 py-3 bg-light">
+        <div class="container text-center">
+            <span class="text-muted">© 2025 UECI - Instituto de Previdência do Estado do Espírito Santo</span>
+        </div>
+    </footer>
+
+    <!-- jQuery DEVE vir PRIMEIRO -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <!-- Bootstrap 5 JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+
+{% if current_user.is_authenticated %}
+    {% include 'components/alertas.html' %}
+{% endif %}
+
+
+  <!-- Script para carregar zoom (REMOVER conflito) -->
+<script>
+    const zoomSalvo = localStorage.getItem('sistema_zoom');
+    if (zoomSalvo) {
+        document.body.style.zoom = zoomSalvo + '%';
+    } else {
+        // Se não houver zoom salvo, usar 80% padrão
+        document.body.style.zoom = '80%';
+    }
+</script>
+
+{% block extra_js %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,143 @@
+<!-- Alertas de Prazo - Sistema Inteligente -->
+<div id="alertasPrazo" style="position: fixed; top: 80px; right: 20px; z-index: 9999; max-width: 400px;"></div>
+
+<!-- Script de alertas - executa APÓS jQuery carregar -->
+<script>
+$(document).ready(function() {
+    console.log('[ALERTAS] jQuery carregado, iniciando verificação de prazos');
+    
+    // Controle de exibição (máximo 2 vezes por sessão)
+    const CHAVE_CONTADOR = 'alertas_exibidos_count';
+    const MAX_EXIBICOES = 2;
+    
+    function getContadorExibicoes() {
+        const contador = sessionStorage.getItem(CHAVE_CONTADOR);
+        return contador ? parseInt(contador) : 0;
+    }
+    
+    function incrementarContador() {
+        const contador = getContadorExibicoes() + 1;
+        sessionStorage.setItem(CHAVE_CONTADOR, contador.toString());
+        return contador;
+    }
+    
+    function mostrarAlertas() {
+        const vezesExibidas = getContadorExibicoes();
+        
+        if (vezesExibidas >= MAX_EXIBICOES) {
+            console.log(`[ALERTAS] Limite de ${MAX_EXIBICOES} exibições atingido nesta sessão`);
+            return;
+        }
+        
+        console.log('[ALERTAS] Buscando alertas...');
+        
+        fetch('/api/alertas/prazos')
+            .then(response => {
+                console.log('[ALERTAS] Resposta recebida:', response);
+                return response.json();
+            })
+            .then(data => {
+                console.log('[ALERTAS] Dados parseados:', data);
+                
+                const container = document.getElementById('alertasPrazo');
+                if (!container) {
+                    console.error('[ALERTAS] Container #alertasPrazo NÃO encontrado!');
+                    return;
+                }
+                
+                container.innerHTML = '';
+                
+                if (!data.alertas || data.alertas.length === 0) {
+                    console.log('[ALERTAS] Nenhum alerta para exibir');
+                    return;
+                }
+                
+                // Incrementar contador SOMENTE se houver alertas para exibir
+                const novoContador = incrementarContador();
+                console.log(`[ALERTAS] Exibindo alertas (${novoContador}/${MAX_EXIBICOES})`);
+                
+                data.alertas.forEach((alerta, index) => {
+                    const alertDiv = document.createElement('div');
+                    alertDiv.className = `alert alert-${alerta.tipo === 'vencido' ? 'danger' : alerta.tipo === 'hoje' ? 'warning' : 'info'} alert-dismissible fade show mb-2 shadow-lg`;
+                    alertDiv.setAttribute('role', 'alert');
+                    alertDiv.style.cssText = 'animation: slideInRight 0.5s ease-out; border-left: 5px solid currentColor;';
+                    
+                    const icone = alerta.tipo === 'vencido' ? 'exclamation-triangle-fill' : 
+                                  alerta.tipo === 'hoje' ? 'clock-fill' : 'info-circle-fill';
+                    
+                    alertDiv.innerHTML = `
+                        <div class="d-flex align-items-start">
+                            <i class="bi bi-${icone} me-2 fs-4"></i>
+                            <div class="flex-grow-1">
+                                <strong>${alerta.titulo}</strong>
+                                <p class="mb-1 small">${alerta.mensagem}</p>
+                                <small class="text-muted">
+                                    <i class="bi bi-calendar-event"></i> ${alerta.data_prevista}
+                                    ${alerta.tipo_prazo ? `<br><i class="bi bi-tag"></i> ${alerta.tipo_prazo}` : ''}
+                                </small>
+                                <br>
+                                <a href="/planilha/${encodeURIComponent(alerta.aba_name)}" 
+                                   class="btn btn-sm btn-outline-primary mt-2">
+                                    <i class="bi bi-eye"></i> Ver Registro
+                                </a>
+                            </div>
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        </div>
+                    `;
+                    
+                    container.appendChild(alertDiv);
+                    console.log('[ALERTAS] Alerta', index + 1, 'adicionado ao DOM');
+                });
+            })
+            .catch(error => {
+                console.error('[ALERTAS] Erro ao buscar alertas:', error);
+            });
+    }
+    
+    // Executar imediatamente
+    mostrarAlertas();
+    
+    // Repetir a cada 5 minutos (mas respeita o limite de 2 exibições)
+    setInterval(mostrarAlertas, 300000);
+});
+</script>
+
+<style>
+@keyframes slideInRight {
+    from {
+        transform: translateX(120%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+#alertasPrazo {
+    pointer-events: none;
+}
+
+#alertasPrazo .alert {
+    pointer-events: all;
+    backdrop-filter: blur(10px);
+    background-color: rgba(255, 255, 255, 0.98) !important;
+    border-radius: 10px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+}
+
+#alertasPrazo .alert-danger {
+    border-color: #dc3545 !important;
+    background-color: rgba(255, 235, 238, 0.98) !important;
+}
+
+#alertasPrazo .alert-warning {
+    border-color: #ffc107 !important;
+    background-color: rgba(255, 250, 230, 0.98) !important;
+}
+
+#alertasPrazo .alert-info {
+    border-color: #0dcaf0 !important;
+    background-color: rgba(230, 249, 255, 0.98) !important;
+}
+</style>

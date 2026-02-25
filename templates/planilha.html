@@ -1,0 +1,941 @@
+{% extends "base.html" %}
+
+{% block title %}{{ aba_name }} - UECI{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-3">
+    <!-- Cabeçalho -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h2 class="mb-1 text-primary fw-bold">
+                        <i class="bi bi-file-earmark-spreadsheet me-2"></i>{{ aba_name }}
+                    </h2>
+                    <p class="text-muted mb-0">Acompanhamento do Plano de Respostas aos Riscos</p>
+                </div>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-info btn-lg" data-bs-toggle="modal" data-bs-target="#linkModal">
+                        <i class="bi bi-link-45deg me-2"></i>Gerar Link para Área
+                    </button>
+                    <button class="btn btn-success btn-lg" data-bs-toggle="modal" data-bs-target="#addModal">
+                        <i class="bi bi-plus-circle me-2"></i>Novo Registro
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabela de Dados -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow border-0">
+                <div class="card-header bg-white border-bottom py-3">
+                    <div class="row align-items-center g-2">
+                        <div class="col-md-6">
+                            <h5 class="mb-0 text-secondary">
+                                <i class="bi bi-table me-2"></i>Registros (<span id="totalRegistros">{{ data|length }}</span>)
+                            </h5>
+                        </div>
+                        <div class="col-md-4">
+                            <input type="text" id="searchInput" class="form-control" placeholder="🔍 Buscar em todos os campos...">
+                        </div>
+                        <div class="col-md-2">
+                            <button class="btn btn-outline-success btn-sm w-100" id="exportExcel">
+                                <i class="bi bi-file-earmark-excel"></i> Exportar Excel
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    <!-- TABELA COM SISTEMA DE ORDENAÇÃO -->
+                    <div class="table-responsive" style="max-height: 75vh; overflow: auto;">
+                        <table class="table mb-0" id="dataTable">
+                            <thead>
+                                <!-- Linha de agrupamento superior -->
+                                <tr style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; position: sticky; top: 0; z-index: 11;">
+                                    <th class="text-center align-middle" rowspan="2"
+                                        style="min-width: 100px;
+                                               border-top: 3px solid white !important;
+                                               border-bottom: 3px solid white !important;
+                                               border-left: 3px solid white !important;
+                                               border-right: 3px solid white !important;
+                                               font-weight: 600;
+                                               vertical-align: middle;
+                                               padding: 12px;">
+                                        Ações
+                                    </th>
+
+                                    {# Separar colunas em 3 grupos #}
+                                    {% set cols_antes = [] %}
+                                    {% set cols_preenchimento = [] %}
+                                    {% set cols_depois = [] %}
+
+                                    {% for col in columns %}
+                                        {% set col_name = col.name if col is mapping else col %}
+                                        {% set is_orange = col_name in orange_columns %}
+
+                                        {% if not is_orange and cols_preenchimento|length == 0 %}
+                                            {% set _ = cols_antes.append(col) %}
+                                        {% elif is_orange %}
+                                            {% set _ = cols_preenchimento.append(col) %}
+                                        {% else %}
+                                            {% set _ = cols_depois.append(col) %}
+                                        {% endif %}
+                                    {% endfor %}
+
+                                    {% if cols_antes|length > 0 %}
+                                    <th colspan="{{ cols_antes|length }}" class="text-center align-middle"
+                                        style="border-top: 3px solid white !important;
+                                               border-bottom: 3px solid white !important;
+                                               border-left: 3px solid white !important;
+                                               border-right: 3px solid white !important;
+                                               font-weight: 600;
+                                               padding: 12px;">
+                                    </th>
+                                    {% endif %}
+
+                                    {% if cols_preenchimento|length > 0 %}
+                                    <th colspan="{{ cols_preenchimento|length }}" class="text-center align-middle"
+                                        style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+                                               border-top: 3px solid white !important;
+                                               border-bottom: 3px solid white !important;
+                                               border-left: 3px solid white !important;
+                                               border-right: 3px solid white !important;
+                                               font-weight: bold;
+                                               font-size: 0.95rem;
+                                               letter-spacing: 0.5px;
+                                               padding: 12px;">
+                                        <i class="bi bi-paint-bucket me-2"></i>PREENCHIMENTO PELA ÁREA RESPONSÁVEL
+                                    </th>
+                                    {% endif %}
+
+                                    {% if cols_depois|length > 0 %}
+                                    <th colspan="{{ cols_depois|length }}" class="text-center align-middle"
+                                        style="border-top: 3px solid white !important;
+                                               border-bottom: 3px solid white !important;
+                                               border-left: 3px solid white !important;
+                                               border-right: 3px solid white !important;
+                                               font-weight: 600;
+                                               padding: 12px;">
+                                    </th>
+                                    {% endif %}
+                                </tr>
+
+                                <!-- Linha de cabeçalhos das colunas COM SETAS DE ORDENAÇÃO -->
+                                <tr style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; position: sticky; top: 52px; z-index: 10;">
+                                    {% for col in columns %}
+                                    {% set col_name = col.name if col is mapping else col %}
+                                    {% set col_type = col.type if col is mapping else 'text' %}
+                                    {% set is_orange = col_name in orange_columns %}
+                                    <th class="text-center align-middle sortable-header"
+                                        data-column="{{ loop.index0 }}"
+                                        data-column-name="{{ col_name }}"
+                                        data-type="{{ col_type }}"
+                                        style="min-width: {% if col_type == 'textarea' %}280{% elif col_type == 'date' %}130{% else %}160{% endif %}px;
+                                               white-space: normal;
+                                               padding: 12px 10px;
+                                               font-size: 0.85rem;
+                                               font-weight: 600;
+                                               border-top: 2px solid white !important;
+                                               border-bottom: 2px solid white !important;
+                                               border-left: 2px solid white !important;
+                                               border-right: 2px solid white !important;
+                                               cursor: pointer;
+                                               user-select: none;
+                                               transition: all 0.2s;
+                                               {% if is_orange %}background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);{% endif %}">
+                                        <div class="d-flex align-items-center justify-content-center gap-2">
+                                            <span class="flex-grow-1">{{ col_name }}</span>
+                                            <span class="sort-arrows">
+                                                <i class="bi bi-caret-up-fill d-block" style="line-height: 0.4; font-size: 11px; opacity: 0.4; margin-bottom: -2px;"></i>
+                                                <i class="bi bi-caret-down-fill d-block" style="line-height: 0.4; font-size: 11px; opacity: 0.4;"></i>
+                                            </span>
+                                        </div>
+                                    </th>
+                                    {% endfor %}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for row in data %}
+                                <tr class="data-row">
+                                    <td class="text-center align-middle"
+                                        style="white-space: nowrap;
+                                               border: 2px solid #cbd5e1 !important;
+                                               background-color: #f8fafc;
+                                               padding: 10px;">
+                                        <div class="btn-group btn-group-sm">
+                                            <button class="btn btn-outline-primary edit-btn"
+                                                    data-id="{{ row.id }}"
+                                                    data-row='{{ row|tojson }}'
+                                                    title="Editar registro">
+                                                <i class="bi bi-pencil-square"></i>
+                                            </button>
+                                            <button class="btn btn-outline-info link-btn"
+                                                    data-id="{{ row.id }}"
+                                                    title="Gerar link para área preencher">
+                                                <i class="bi bi-link-45deg"></i>
+                                            </button>
+                                            <form method="POST" action="{{ url_for('main.delete_row', aba_name=aba_name, row_id=row.id) }}"
+                                                  style="display: inline;" onsubmit="return confirm('⚠️ Tem certeza que deseja excluir este registro?');">
+                                                <button type="submit" class="btn btn-outline-danger btn-sm" title="Excluir registro">
+                                                    <i class="bi bi-trash"></i>
+                                                </button>
+                                            </form>
+                                        </div>
+                                    </td>
+                                    {% for col in columns %}
+                                    {% set col_name = col.name if col is mapping else col %}
+                                    {% set col_type = col.type if col is mapping else 'text' %}
+                                    {% set is_orange = col_name in orange_columns %}
+                                    <td class="align-middle"
+                                        data-value="{{ row.get(col_name, '') }}"
+                                        data-type="{{ col_type }}"
+                                        style="padding: 12px 10px;
+                                               border: 2px solid #cbd5e1 !important;
+                                               {% if is_orange %}background-color: #fef3c7; font-weight: 500;{% endif %}">
+                                        {{ row.get(col_name, '') }}
+                                    </td>
+                                    {% endfor %}
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Gerar Link para Área -->
+<div class="modal fade" id="linkModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header" style="background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%); color: white;">
+                <h5 class="modal-title"><i class="bi bi-link-45deg me-2"></i>Gerar Link de Preenchimento para Área Responsável</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle me-2"></i>
+                    <strong>Como funciona:</strong> Selecione um registro abaixo para gerar um link temporário (válido por 10 dias úteis) que permitirá que a área responsável preencha apenas as colunas da seção "PREENCHIMENTO PELA ÁREA RESPONSÁVEL".
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Selecione o Nº da Nota Recomendatória:</label>
+                    <select class="form-select" id="linkRegistroId">
+                        <option value="">Escolha uma nota recomendatória...</option>
+                        {% for row in data %}
+                        <option value="{{ row.id }}">
+                            {% if row.get('Nº Nota Recomendatória') %}
+                                📋 Nota {{ row.get('Nº Nota Recomendatória') }}
+                            {% else %}
+                                📋 Reg #{{ loop.index }}
+                            {% endif %}
+                            {% if row.get('Exercício') %} - {{ row.get('Exercício') }}{% endif %}
+                            {% if row.get('Recomendação') %} - {{ row.get('Recomendação')[:50] }}...{% endif %}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div id="linkGeradoContainer" style="display: none;">
+                    <hr>
+                    <div class="alert alert-success">
+                        <h6><i class="bi bi-check-circle me-2"></i>Link Gerado com Sucesso!</h6>
+                        <div class="input-group mt-2">
+                            <input type="text" class="form-control" id="linkGerado" readonly>
+                            <button class="btn btn-outline-secondary" onclick="copiarLink()">
+                                <i class="bi bi-clipboard"></i> Copiar
+                            </button>
+                        </div>
+                        <small class="text-muted mt-2 d-block">
+                            <i class="bi bi-clock"></i> Expira em: <span id="linkExpiracao"></span>
+                        </small>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                <button type="button" class="btn btn-info" onclick="gerarLink()">
+                    <i class="bi bi-link-45deg me-2"></i>Gerar Link
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Adicionar -->
+<div class="modal fade" id="addModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+                <h5 class="modal-title"><i class="bi bi-plus-circle me-2"></i>Adicionar Novo Registro - {{ aba_name }}</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{{ url_for('main.add_row', aba_name=aba_name) }}">
+                <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
+                    <div class="row">
+                        {% for col in columns %}
+                        {% set col_name = col.name if col is mapping else col %}
+                        {% set col_type = col.type if col is mapping else 'text' %}
+                        <div class="col-md-{% if col_type == 'textarea' %}12{% else %}6{% endif %} mb-3">
+                            <label class="form-label fw-semibold">{{ col_name }}</label>
+                            {% if col_type == 'textarea' %}
+                                <textarea class="form-control" name="{{ col_name }}" rows="3"
+                                          placeholder="{{ col_name }}"></textarea>
+                            {% elif col_type == 'date' %}
+                                <input type="text" class="form-control date-input" name="{{ col_name }}"
+                                       placeholder="dd/mm/aaaa" maxlength="10">
+                            {% elif col_type == 'select' %}
+                                <select class="form-select" name="{{ col_name }}">
+                                    <option value="">Selecione...</option>
+                                    {% set configured_options = dropdown_configs.get(col_name, []) %}
+                                    {% if configured_options %}
+                                        {% for opt in configured_options %}
+                                            {% if opt %}
+                                                {% if opt is mapping %}
+                                                    {% set opt_value = (opt.get('value', opt.get('label', '')) | string).strip() %}
+                                                    {% set opt_label = (opt.get('label', opt_value) | string).strip() %}
+                                                {% else %}
+                                                    {% set raw_opt = (opt | string).strip() %}
+                                                    {% if ':' in raw_opt %}
+                                                        {% set parts = raw_opt.split(':', 1) %}
+                                                        {% set opt_value = parts[0].strip() %}
+                                                        {% set opt_label = parts[0].strip() ~ ' - ' ~ parts[1].strip() %}
+                                                    {% else %}
+                                                        {% set opt_value = raw_opt %}
+                                                        {% set opt_label = raw_opt %}
+                                                    {% endif %}
+                                                {% endif %}
+                                                <option value="{{ opt_value }}">{{ opt_label }}</option>
+                                            {% endif %}
+                                        {% endfor %}
+                                    {% elif 'Responsável pela' in col_name %}
+                                        <option>Carla Zambi</option>
+                                        <option>Gabriela Salgado</option>
+                                        <option>Larissa Janiques</option>
+                                    {% elif 'STATUS DA RECOMENDAÇÃO' in col_name or 'situação atual' in col_name %}
+                                        <option>Cumprida – Implementada conforme recomendação.</option>
+                                        <option>Cumprida com Ressalvas – Implementada, mas com limitações ou pequenas adequações.</option>
+                                        <option>A cumprir – A partir das próximas demandas.</option>
+                                        <option>Não Cumprida – Ante justificativa.</option>
+                                        <option>Em Andamento – A implementação está em progresso na área.</option>
+                                        <option>Aguardando Aprovação – Medidas foram propostas, mas aguardam validação superior.</option>
+                                        <option>Risco Assumido – A Administração optou por não implementar a recomendação, assumindo os riscos envolvidos.</option>
+                                    {% elif 'Status para' in col_name %}
+                                        <option>Implementada</option>
+                                        <option>Atrasada</option>
+                                        <option>Em monitoramento</option>
+                                        <option>Não acatada</option>
+                                        <option>Sem evidências de ação</option>
+                                        <option>Será implementada a partir das próximas ocorrências</option>
+                                    {% elif 'Tipo de Ação' in col_name or 'TIPO DE AÇÃO' in col_name %}
+                                        <option>MELHORIA</option>
+                                        <option>REGULARIZAÇÃO</option>
+                                    {% elif 'Origem' in col_name or 'ORIGEM' in col_name %}
+                                        <option>RELUCI</option>
+                                        <option>PRÓ-GESTÃO</option>
+                                        <option>OUTRAS DEMANDAS</option>
+                                    {% elif 'Unidade Gestora' in col_name or 'UG' == col_name %}
+                                        <option>600201 - IPAJM</option>
+                                        <option>600210 - FF</option>
+                                        <option>600211 - FP</option>
+                                        <option>600212 - FPS</option>
+                                    {% endif %}
+                                </select>
+                            {% else %}
+                                <input type="text" class="form-control" name="{{ col_name }}"
+                                       placeholder="{{ col_name }}">
+                            {% endif %}
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="bi bi-x-circle me-2"></i>Cancelar
+                    </button>
+                    <button type="submit" class="btn btn-success">
+                        <i class="bi bi-check-circle me-2"></i>Salvar Registro
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Editar -->
+<div class="modal fade" id="editModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+                <h5 class="modal-title"><i class="bi bi-pencil me-2"></i>Editar Registro</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" id="editForm">
+                <div class="modal-body" style="max-height: 70vh; overflow-y: auto;" id="editFormFields">
+                    <!-- Campos serão preenchidos via JavaScript -->
+                </div>
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="bi bi-x-circle me-2"></i>Cancelar
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-check-circle me-2"></i>Atualizar Registro
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<style>
+/* Estilos modernos para melhor delimitação */
+#dataTable {
+    font-size: 0.9rem;
+    border-collapse: separate !important;
+    border-spacing: 0 !important;
+}
+
+/* FORÇAR bordas nos cabeçalhos */
+#dataTable thead th {
+    border: 3px solid white !important;
+    vertical-align: middle !important;
+    background-clip: padding-box !important;
+}
+
+/* Bordas ainda mais fortes para segunda linha */
+#dataTable thead tr:nth-child(2) th {
+    border-left: 2px solid white !important;
+    border-right: 2px solid white !important;
+    border-top: 2px solid white !important;
+    border-bottom: 3px solid white !important;
+}
+
+/* Efeito hover nos cabeçalhos ordenáveis */
+#dataTable thead .sortable-header:hover {
+    background-color: rgba(255, 255, 255, 0.15) !important;
+    transform: translateY(-1px);
+}
+
+/* Bordas nas células do corpo */
+#dataTable tbody td {
+    border: 2px solid #cbd5e1 !important;
+    transition: all 0.2s;
+    vertical-align: middle !important;
+    background-clip: padding-box !important;
+}
+
+#dataTable tbody tr {
+    border-bottom: 3px solid #94a3b8 !important;
+}
+
+#dataTable tbody tr:hover td {
+    background-color: #f1f5f9 !important;
+    transform: scale(1.002);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+#dataTable tbody tr:hover td[style*="background-color: #fef3c7"] {
+    background-color: #fde68a !important;
+}
+
+.table-responsive {
+    border-radius: 8px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.btn-group-sm .btn {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.875rem;
+}
+
+/* Garantir que table não sobreponha os estilos */
+#dataTable,
+#dataTable * {
+    box-sizing: border-box !important;
+}
+</style>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    const columns = {{ columns|tojson }};
+    const orangeColumns = {{ orange_columns|tojson }};
+    let dropdownConfigs = {{ dropdown_configs|tojson }};
+
+    function normalizeFieldName(name) {
+        return String(name ?? '')
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .toLowerCase()
+            .replace(/\s+/g, ' ')
+            .trim();
+    }
+
+    function getOptionsForColumn(colName) {
+        const exact = dropdownConfigs[colName];
+        if (Array.isArray(exact)) {
+            return exact;
+        }
+
+        const target = normalizeFieldName(colName);
+        for (const [key, value] of Object.entries(dropdownConfigs || {})) {
+            if (normalizeFieldName(key) === target && Array.isArray(value)) {
+                return value;
+            }
+        }
+
+        return [];
+    }
+
+    async function refreshDropdownConfigs() {
+        try {
+            const response = await fetch(`/configuracoes/dropdowns/obter/${encodeURIComponent('{{ aba_name }}')}`);
+            const result = await response.json();
+            if (result && result.success && result.dropdowns) {
+                dropdownConfigs = result.dropdowns;
+            }
+        } catch (error) {
+            console.error('Erro ao atualizar dropdowns:', error);
+        }
+    }
+
+    function escapeHtml(text) {
+        return String(text ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    function buildConfiguredOptions(colName, currentValue) {
+        const rawOptions = getOptionsForColumn(colName);
+        if (!Array.isArray(rawOptions) || rawOptions.length === 0) {
+            return '';
+        }
+
+        let html = '';
+        const current = String(currentValue ?? '').trim();
+
+        rawOptions.forEach(opt => {
+            if (opt === null || opt === undefined) return;
+
+            let optValue = '';
+            let optLabel = '';
+            let rawText = '';
+
+            if (typeof opt === 'object' && !Array.isArray(opt)) {
+                optValue = String(opt.value ?? opt.label ?? '').trim();
+                optLabel = String(opt.label ?? optValue).trim();
+                rawText = optValue;
+            } else {
+                rawText = String(opt).trim();
+                if (!rawText) return;
+
+                if (rawText.includes(':')) {
+                    const parts = rawText.split(':', 2);
+                    optValue = parts[0].trim();
+                    optLabel = `${parts[0].trim()} - ${parts[1].trim()}`;
+                } else {
+                    optValue = rawText;
+                    optLabel = rawText;
+                }
+            }
+
+            if (!optValue && !optLabel) return;
+            const selected = (current === optValue || current === optLabel || current === rawText) ? ' selected' : '';
+            html += `<option value="${escapeHtml(optValue)}"${selected}>${escapeHtml(optLabel)}</option>`;
+        });
+
+        return html;
+    }
+
+    async function refreshAddModalSelects() {
+        await refreshDropdownConfigs();
+
+        $('#addModal select.form-select[name]').each(function() {
+            const colName = $(this).attr('name');
+            const optionsHtml = buildConfiguredOptions(colName, '');
+            if (optionsHtml) {
+                $(this).html('<option value="">Selecione...</option>' + optionsHtml);
+            }
+        });
+    }
+
+    // ============================================
+    // SISTEMA DE ORDENAÇÃO COM SETAS NOS CABEÇALHOS
+    // ============================================
+
+    let currentSortColumn = -1;
+    let currentSortDirection = 'none';
+    let allRowsData = [];
+
+    function normalizeText(text) {
+        if (!text) return '';
+        return text.toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    }
+
+    function parseDate(dateStr) {
+        if (!dateStr || dateStr.trim() === '') return 0;
+        const parts = dateStr.split('/');
+        if (parts.length === 3) {
+            const day = parseInt(parts[0]);
+            const month = parseInt(parts[1]) - 1;
+            const year = parseInt(parts[2]);
+            return new Date(year, month, day).getTime();
+        }
+        return 0;
+    }
+
+    $('.data-row').each(function() {
+        const row = $(this);
+        const rowData = {};
+        const editBtn = row.find('.edit-btn');
+        if (editBtn.length > 0) {
+            const jsonData = editBtn.data('row');
+            if (jsonData) {
+                Object.assign(rowData, jsonData);
+            }
+        }
+        allRowsData.push({ element: row, data: rowData });
+    });
+
+    function sortTable(columnIndex, columnName, dataType) {
+        const tbody = $('#dataTable tbody');
+
+        if (currentSortColumn === columnIndex) {
+            if (currentSortDirection === 'none') {
+                currentSortDirection = 'asc';
+            } else if (currentSortDirection === 'asc') {
+                currentSortDirection = 'desc';
+            } else {
+                currentSortDirection = 'none';
+            }
+        } else {
+            currentSortColumn = columnIndex;
+            currentSortDirection = 'asc';
+        }
+
+        $('.sortable-header .sort-arrows i').css('opacity', '0.4');
+
+        if (currentSortDirection === 'none') {
+            const rows = allRowsData.map(item => item.element.get(0));
+            tbody.empty();
+            rows.forEach(row => tbody.append(row));
+            currentSortColumn = -1;
+            return;
+        }
+
+        const $currentHeader = $(`.sortable-header[data-column="${columnIndex}"]`);
+        const $arrows = $currentHeader.find('.sort-arrows i');
+
+        if (currentSortDirection === 'asc') {
+            $arrows.first().css('opacity', '1');
+        } else {
+            $arrows.last().css('opacity', '1');
+        }
+
+        const sortedData = [...allRowsData].sort((a, b) => {
+            let valueA = a.data[columnName] || '';
+            let valueB = b.data[columnName] || '';
+            let comparison = 0;
+
+            if (dataType === 'date') {
+                const dateA = parseDate(valueA);
+                const dateB = parseDate(valueB);
+                comparison = dateA - dateB;
+            } else if (dataType === 'select' || dataType === 'text' || dataType === 'textarea') {
+                const textA = normalizeText(valueA);
+                const textB = normalizeText(valueB);
+                comparison = textA.localeCompare(textB, 'pt-BR');
+            } else {
+                const numA = parseFloat(String(valueA).replace(/[^\d,-]/g, '').replace(',', '.'));
+                const numB = parseFloat(String(valueB).replace(/[^\d,-]/g, '').replace(',', '.'));
+
+                if (!isNaN(numA) && !isNaN(numB)) {
+                    comparison = numA - numB;
+                } else {
+                    const textA = normalizeText(valueA);
+                    const textB = normalizeText(valueB);
+                    comparison = textA.localeCompare(textB, 'pt-BR');
+                }
+            }
+
+            return currentSortDirection === 'asc' ? comparison : -comparison;
+        });
+
+        tbody.empty();
+        sortedData.forEach(item => tbody.append(item.element));
+        aplicarFiltro();
+    }
+
+    $('.sortable-header').on('click', function() {
+        const columnIndex = parseInt($(this).data('column'));
+        const columnName = $(this).data('column-name');
+        const dataType = $(this).data('type');
+        sortTable(columnIndex, columnName, dataType);
+    });
+
+    // ============================================
+    // BUSCA
+    // ============================================
+
+    function aplicarFiltro() {
+        const searchTerm = normalizeText($('#searchInput').val());
+        let visibleCount = 0;
+
+        $('#dataTable tbody tr.data-row').each(function() {
+            const rowText = normalizeText($(this).text());
+            if (rowText.includes(searchTerm)) {
+                $(this).show();
+                visibleCount++;
+            } else {
+                $(this).hide();
+            }
+        });
+
+        $('#totalRegistros').text(visibleCount);
+    }
+
+    $('#searchInput').on('keyup', aplicarFiltro);
+
+    // ============================================
+    // EXPORTAR EXCEL
+    // ============================================
+
+    $('#exportExcel').on('click', function() {
+        window.location.href = "{{ url_for('main.export_planilha_excel', aba_name=aba_name) }}";
+    });
+
+    // ============================================
+    // GERAR LINK
+    // ============================================
+
+    window.gerarLink = function() {
+        const registroId = $('#linkRegistroId').val();
+
+        if (!registroId) {
+            alert('Por favor, selecione um registro!');
+            return;
+        }
+
+        fetch(`/planilha/{{ aba_name|urlencode }}/gerar-link`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ registro_id: registroId })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                $('#linkGerado').val(data.link);
+                $('#linkExpiracao').text(data.expiracao);
+                $('#linkGeradoContainer').slideDown();
+            } else {
+                alert('Erro: ' + data.message);
+            }
+        })
+        .catch(error => {
+            console.error('Erro:', error);
+            alert('Erro ao gerar link.');
+        });
+    };
+
+    window.copiarLink = function() {
+        const linkInput = document.getElementById('linkGerado');
+        linkInput.select();
+        document.execCommand('copy');
+
+        const btn = event.target.closest('button');
+        const originalHTML = btn.innerHTML;
+        btn.innerHTML = '<i class="bi bi-check"></i> Copiado!';
+        btn.classList.add('btn-success');
+        btn.classList.remove('btn-outline-secondary');
+
+        setTimeout(() => {
+            btn.innerHTML = originalHTML;
+            btn.classList.remove('btn-success');
+            btn.classList.add('btn-outline-secondary');
+        }, 2000);
+    };
+
+    $('.link-btn').click(function() {
+        const rowId = $(this).data('id');
+        $('#linkRegistroId').val(rowId);
+        $('#linkModal').modal('show');
+    });
+
+    // ============================================
+    // EDITAR
+    // ============================================
+
+    $('.edit-btn').click(async function() {
+        await refreshDropdownConfigs();
+
+        const rowId = $(this).data('id');
+        const rowData = $(this).data('row');
+        const editUrl = `/planilha/{{ aba_name|urlencode }}/edit/${rowId}`;
+        $('#editForm').attr('action', editUrl);
+
+        let html = '<div class="row">';
+
+        columns.forEach(col => {
+            const colName = typeof col === 'object' ? col.name : col;
+            const colType = typeof col === 'object' ? col.type : 'text';
+            let value = rowData[colName] || '';
+            const colSize = colType === 'textarea' ? 'col-12' : 'col-md-6';
+
+            html += `<div class="${colSize} mb-3">`;
+            html += `<label class="form-label fw-semibold">${colName}</label>`;
+
+            if (colType === 'textarea') {
+                html += `<textarea class="form-control" name="${colName}" rows="3">${value}</textarea>`;
+            } else if (colType === 'date') {
+                html += `<input type="text" class="form-control date-input" name="${colName}" value="${value}" placeholder="dd/mm/aaaa" maxlength="10">`;
+            } else if (colType === 'select') {
+                let options = '<option value="">Selecione...</option>';
+                const configuredOptions = buildConfiguredOptions(colName, value);
+
+                if (configuredOptions) {
+                    options += configuredOptions;
+                } else if (colName.includes('Responsável pela')) {
+                    options += '<option>Carla Zambi</option><option>Gabriela Salgado</option><option>Larissa Janiques</option>';
+                } else if (colName.includes('STATUS DA RECOMENDAÇÃO') || colName.includes('situação atual')) {
+                    options += '<option>Cumprida – Implementada conforme recomendação.</option>';
+                    options += '<option>Cumprida com Ressalvas – Implementada, mas com limitações ou pequenas adequações.</option>';
+                    options += '<option>A cumprir – A partir das próximas demandas.</option>';
+                    options += '<option>Não Cumprida – Ante justificativa.</option>';
+                    options += '<option>Em Andamento – A implementação está em progresso na área.</option>';
+                    options += '<option>Aguardando Aprovação – Medidas foram propostas, mas aguardam validação superior.</option>';
+                    options += '<option>Risco Assumido – A Administração optou por não implementar a recomendação, assumindo os riscos envolvidos.</option>';
+                } else if (colName.includes('Status para')) {
+                    options += '<option>Implementada</option><option>Atrasada</option><option>Em monitoramento</option>';
+                    options += '<option>Não acatada</option><option>Sem evidências de ação</option>';
+                    options += '<option>Será implementada a partir das próximas ocorrências</option>';
+                } else if (colName.includes('Tipo de Ação') || colName.includes('TIPO DE AÇÃO')) {
+                    options += '<option>MELHORIA</option><option>REGULARIZAÇÃO</option>';
+                } else if (colName.includes('Origem') || colName.includes('ORIGEM')) {
+                    options += '<option>RELUCI</option><option>PRÓ-GESTÃO</option><option>OUTRAS DEMANDAS</option>';
+                } else if (colName.includes('Unidade Gestora') || colName === 'UG') {
+                    options += '<option>600201 - IPAJM</option><option>600210 - FF</option><option>600211 - FP</option><option>600212 - FPS</option>';
+                }
+
+                html += `<select class="form-select" name="${colName}">`;
+                html += configuredOptions ? options : options.replace(`<option>${value}`, `<option selected>${value}`);
+                html += `</select>`;
+            } else {
+                html += `<input type="text" class="form-control" name="${colName}" value="${value}">`;
+            }
+
+            html += `</div>`;
+        });
+
+        html += '</div>';
+        $('#editFormFields').html(html);
+        aplicarFormatacaoData();
+        $('#editModal').modal('show');
+    });
+
+    $('#addModal').on('show.bs.modal', async function() {
+        await refreshAddModalSelects();
+    });
+
+    // ============================================
+    // FORMATAÇÃO DE DATA
+    // ============================================
+
+    function aplicarFormatacaoData() {
+        $('.date-input').off('input').on('input', function(e) {
+            let value = $(this).val().replace(/\D/g, '');
+
+            if (value.length >= 2) {
+                value = value.substring(0, 2) + '/' + value.substring(2);
+            }
+            if (value.length >= 5) {
+                value = value.substring(0, 5) + '/' + value.substring(5, 9);
+            }
+
+            $(this).val(value);
+        });
+
+        $('.date-input').off('blur').on('blur', function() {
+            const value = $(this).val();
+            if (value && value.length === 10) {
+                const parts = value.split('/');
+                if (parts.length === 3) {
+                    const day = parseInt(parts[0]);
+                    const month = parseInt(parts[1]);
+                    const year = parseInt(parts[2]);
+
+                    if (day < 1 || day > 31 || month < 1 || month > 12 || year < 1900 || year > 2100) {
+                        alert('⚠️ Data inválida! Use o formato dd/mm/aaaa');
+                        $(this).val('');
+                    }
+                }
+            }
+        });
+    }
+
+    aplicarFormatacaoData();
+
+    $('#addModal, #editModal').on('shown.bs.modal', function() {
+        aplicarFormatacaoData();
+    });
+
+    // ============================================
+    // DRAG TO SCROLL
+    // ============================================
+
+    const tableContainer = document.querySelector('.table-responsive');
+    let isDown = false;
+    let startX, startY, scrollLeft, scrollTop;
+
+    tableContainer.addEventListener('mousedown', (e) => {
+        if (e.target.tagName === 'BUTTON' || e.target.tagName === 'A' ||
+            e.target.tagName === 'INPUT' || e.target.closest('button') ||
+            e.target.closest('.sortable-header')) {
+            return;
+        }
+
+        isDown = true;
+        tableContainer.style.cursor = 'grabbing';
+        tableContainer.style.userSelect = 'none';
+
+        startX = e.pageX - tableContainer.offsetLeft;
+        startY = e.pageY - tableContainer.offsetTop;
+        scrollLeft = tableContainer.scrollLeft;
+        scrollTop = tableContainer.scrollTop;
+    });
+
+    tableContainer.addEventListener('mouseleave', () => {
+        isDown = false;
+        tableContainer.style.cursor = 'grab';
+    });
+
+    tableContainer.addEventListener('mouseup', () => {
+        isDown = false;
+        tableContainer.style.cursor = 'grab';
+    });
+
+    tableContainer.addEventListener('mousemove', (e) => {
+        if (!isDown) return;
+        e.preventDefault();
+
+        const x = e.pageX - tableContainer.offsetLeft;
+        const y = e.pageY - tableContainer.offsetTop;
+        const walkX = (x - startX) * 1.5;
+        const walkY = (y - startY) * 1.5;
+
+        tableContainer.scrollLeft = scrollLeft - walkX;
+        tableContainer.scrollTop = scrollTop - walkY;
+    });
+
+    tableContainer.style.cursor = 'grab';
+});
+</script>
+{% endblock %}

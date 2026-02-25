@@ -1,0 +1,386 @@
+{% extends "base.html" %}
+
+{% block title %}Editar Colunas - UECI{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h2 class="mb-0">
+                <i class="bi bi-columns-gap"></i> Gerenciar Colunas das Planilhas
+            </h2>
+            <p class="text-muted">Adicione, edite, remova ou reorganize as colunas de cada planilha</p>
+        </div>
+    </div>
+    
+    <!-- Abas das Planilhas -->
+    <ul class="nav nav-tabs mb-4" id="abasTabs" role="tablist">
+        {% for aba in abas %}
+        <li class="nav-item" role="presentation">
+            <button class="nav-link {% if loop.first %}active{% endif %}" 
+                    id="tab-{{ loop.index }}" 
+                    data-bs-toggle="tab" 
+                    data-bs-target="#content-{{ loop.index }}" 
+                    data-aba-name="{{ aba.aba_name }}"
+                    type="button" 
+                    role="tab"
+                    onclick="carregarColunas('{{ aba.aba_name }}', {{ loop.index }})">
+                <i class="bi bi-file-earmark-spreadsheet"></i> {{ aba.aba_name }}
+            </button>
+        </li>
+        {% endfor %}
+    </ul>
+    
+    <div class="tab-content" id="abasContent">
+        {% for aba in abas %}
+        <div class="tab-pane fade {% if loop.first %}show active{% endif %}" 
+             id="content-{{ loop.index }}" 
+             role="tabpanel">
+            
+            <div class="row">
+                <div class="col-md-8">
+                    <div class="card shadow">
+                        <div class="card-header bg-gradient" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+                            <h5 class="mb-0"><i class="bi bi-list-ol"></i> Colunas Atuais</h5>
+                        </div>
+                        <div class="card-body">
+                            <div id="colunas-list-{{ loop.index }}" class="list-group">
+                                <!-- Colunas serão carregadas aqui -->
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Seção de Colunas Laranjas -->
+                    <div class="card shadow mt-3">
+                        <div class="card-header" style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); color: white;">
+                            <h6 class="mb-0"><i class="bi bi-paint-bucket"></i> Colunas "PREENCHIMENTO PELA ÁREA RESPONSÁVEL"</h6>
+                        </div>
+                        <div class="card-body">
+                            <p class="small text-muted mb-2">Marque as colunas que devem aparecer em laranja na seção "PREENCHIMENTO PELA ÁREA RESPONSÁVEL":</p>
+                            <div id="orange-selection-{{ loop.index }}">
+                                <!-- Checkboxes serão gerados aqui -->
+                            </div>
+                            <button class="btn btn-warning btn-sm mt-2" onclick="salvarColunasLaranjas('{{ aba.aba_name }}', {{ loop.index }})">
+                                <i class="bi bi-save"></i> Salvar Seleção Laranja
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-md-4">
+                    <div class="card shadow mb-3">
+                        <div class="card-header bg-success text-white">
+                            <h6 class="mb-0"><i class="bi bi-plus-circle"></i> Adicionar Nova Coluna</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <label class="form-label">Nome da Coluna</label>
+                                <input type="text" class="form-control" id="nova-coluna-nome-{{ loop.index }}" placeholder="Ex: Nº Nota Recomendatória">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Tipo de Campo</label>
+                                <select class="form-select" id="nova-coluna-tipo-{{ loop.index }}">
+                                    <option value="text">Texto</option>
+                                    <option value="textarea">Área de Texto</option>
+                                    <option value="date">Data</option>
+                                    <option value="select">Lista Suspensa</option>
+                                </select>
+                            </div>
+                            <button class="btn btn-success w-100" onclick="adicionarColuna({{ loop.index }})">
+                                <i class="bi bi-plus-lg"></i> Adicionar
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="card shadow">
+                        <div class="card-header bg-primary text-white">
+                            <h6 class="mb-0"><i class="bi bi-save"></i> Salvar Alterações</h6>
+                        </div>
+                        <div class="card-body">
+                            <button class="btn btn-primary w-100" onclick="salvarColunas('{{ aba.aba_name }}', {{ loop.index }})">
+                                <i class="bi bi-check-circle"></i> Salvar Configuração
+                            </button>
+                            <hr>
+                            <small class="text-muted">
+                                <i class="bi bi-info-circle"></i> Use as setas para reordenar, o lápis para editar e o X para remover.
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- Modal de Edição -->
+<div class="modal fade" id="editModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title"><i class="bi bi-pencil"></i> Editar Coluna</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="edit-aba-name">
+                <input type="hidden" id="edit-index">
+                <div class="mb-3">
+                    <label class="form-label">Nome da Coluna</label>
+                    <input type="text" class="form-control" id="edit-nome">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Tipo de Campo</label>
+                    <select class="form-select" id="edit-tipo">
+                        <option value="text">Texto</option>
+                        <option value="textarea">Área de Texto</option>
+                        <option value="date">Data</option>
+                        <option value="select">Lista Suspensa</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" onclick="salvarEdicaoColuna()">Salvar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let colunasData = {};
+let orangeColumns = {};
+let currentAbaName = '';
+
+function carregarColunas(abaName, index) {
+    currentAbaName = abaName;
+    
+    // Carregar colunas
+    fetch(`/configuracoes/colunas/get/${encodeURIComponent(abaName)}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                colunasData[index] = data.colunas;
+                renderizarColunas(index);
+                carregarColunasLaranjas(abaName, index);
+            }
+        });
+}
+
+function carregarColunasLaranjas(abaName, index) {
+    fetch(`/configuracoes/colunas/orange/${encodeURIComponent(abaName)}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                orangeColumns[index] = data.orange_columns || [];
+                renderizarSelecaoLaranja(index);
+            }
+        });
+}
+
+function renderizarColunas(index) {
+    const container = document.getElementById(`colunas-list-${index}`);
+    const colunas = colunasData[index] || [];
+    
+    container.innerHTML = '';
+    
+    colunas.forEach((col, i) => {
+        const nome = col.name || col;
+        const tipo = col.type || 'text';
+        const isOrange = orangeColumns[index] && orangeColumns[index].includes(nome);
+        
+        const item = document.createElement('div');
+        item.className = 'list-group-item d-flex justify-content-between align-items-center' + (isOrange ? ' bg-warning bg-opacity-25' : '');
+        item.innerHTML = `
+            <div class="d-flex align-items-center gap-3">
+                <div class="btn-group-vertical btn-group-sm">
+                    <button class="btn btn-outline-secondary btn-sm" ${i === 0 ? 'disabled' : ''} onclick="moverCima(${index}, ${i})" title="Mover para cima">
+                        <i class="bi bi-arrow-up"></i>
+                    </button>
+                    <button class="btn btn-outline-secondary btn-sm" ${i === colunas.length - 1 ? 'disabled' : ''} onclick="moverBaixo(${index}, ${i})" title="Mover para baixo">
+                        <i class="bi bi-arrow-down"></i>
+                    </button>
+                </div>
+                <div>
+                    <strong>${i + 1}. ${nome}</strong>
+                    ${isOrange ? '<span class="badge bg-warning text-dark ms-2">LARANJA</span>' : ''}
+                    <br>
+                    <small class="text-muted">Tipo: ${tipo}</small>
+                </div>
+            </div>
+            <div class="btn-group btn-group-sm">
+                <button class="btn btn-sm btn-outline-primary" onclick="abrirEdicao(${index}, ${i}, '${nome.replace(/'/g, "\\'")}', '${tipo}')" title="Editar coluna">
+                    <i class="bi bi-pencil"></i>
+                </button>
+                <button class="btn btn-sm btn-outline-danger" onclick="removerColuna(${index}, ${i})" title="Remover coluna">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>
+        `;
+        container.appendChild(item);
+    });
+    
+    renderizarSelecaoLaranja(index);
+}
+
+function renderizarSelecaoLaranja(index) {
+    const container = document.getElementById(`orange-selection-${index}`);
+    const colunas = colunasData[index] || [];
+    const orange = orangeColumns[index] || [];
+    
+    container.innerHTML = '';
+    
+    colunas.forEach((col, i) => {
+        const nome = col.name || col;
+        const checked = orange.includes(nome) ? 'checked' : '';
+        
+        const div = document.createElement('div');
+        div.className = 'form-check';
+        div.innerHTML = `
+            <input class="form-check-input orange-check-${index}" type="checkbox" value="${nome}" id="orange-${index}-${i}" ${checked}>
+            <label class="form-check-label" for="orange-${index}-${i}">
+                ${nome}
+            </label>
+        `;
+        container.appendChild(div);
+    });
+}
+
+function abrirEdicao(index, colIndex, nome, tipo) {
+    document.getElementById('edit-aba-name').value = currentAbaName;
+    document.getElementById('edit-index').value = colIndex;
+    document.getElementById('edit-nome').value = nome;
+    document.getElementById('edit-tipo').value = tipo;
+    
+    new bootstrap.Modal(document.getElementById('editModal')).show();
+}
+
+function salvarEdicaoColuna() {
+    const abaName = document.getElementById('edit-aba-name').value;
+    const index = parseInt(document.getElementById('edit-index').value);
+    const nome = document.getElementById('edit-nome').value.trim();
+    const tipo = document.getElementById('edit-tipo').value;
+    
+    if (!nome) {
+        alert('Digite o nome da coluna');
+        return;
+    }
+    
+    fetch(`/configuracoes/colunas/editar/${encodeURIComponent(abaName)}/${index}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nome: nome, tipo: tipo })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('Coluna atualizada!');
+            bootstrap.Modal.getInstance(document.getElementById('editModal')).hide();
+            location.reload();
+        } else {
+            alert('Erro: ' + data.message);
+        }
+    });
+}
+
+function adicionarColuna(index) {
+    const nome = document.getElementById(`nova-coluna-nome-${index}`).value.trim();
+    const tipo = document.getElementById(`nova-coluna-tipo-${index}`).value;
+    
+    if (!nome) {
+        alert('Digite o nome da coluna');
+        return;
+    }
+    
+    if (!colunasData[index]) {
+        colunasData[index] = [];
+    }
+    
+    colunasData[index].push({ name: nome, type: tipo });
+    renderizarColunas(index);
+    
+    document.getElementById(`nova-coluna-nome-${index}`).value = '';
+    document.getElementById(`nova-coluna-tipo-${index}`).value = 'text';
+}
+
+function removerColuna(index, colIndex) {
+    if (confirm('Tem certeza que deseja remover esta coluna?')) {
+        colunasData[index].splice(colIndex, 1);
+        renderizarColunas(index);
+    }
+}
+
+function moverCima(index, colIndex) {
+    if (colIndex > 0) {
+        const temp = colunasData[index][colIndex];
+        colunasData[index][colIndex] = colunasData[index][colIndex - 1];
+        colunasData[index][colIndex - 1] = temp;
+        renderizarColunas(index);
+    }
+}
+
+function moverBaixo(index, colIndex) {
+    if (colIndex < colunasData[index].length - 1) {
+        const temp = colunasData[index][colIndex];
+        colunasData[index][colIndex] = colunasData[index][colIndex + 1];
+        colunasData[index][colIndex + 1] = temp;
+        renderizarColunas(index);
+    }
+}
+
+function salvarColunasLaranjas(abaName, index) {
+    const checkboxes = document.querySelectorAll(`.orange-check-${index}:checked`);
+    const selectedOrange = Array.from(checkboxes).map(cb => cb.value);
+    
+    fetch(`/configuracoes/colunas/orange/${encodeURIComponent(abaName)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orange_columns: selectedOrange })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('Colunas laranjas atualizadas!');
+            orangeColumns[index] = selectedOrange;
+            renderizarColunas(index);
+        } else {
+            alert('Erro: ' + data.message);
+        }
+    });
+}
+
+function salvarColunas(abaName, index) {
+    const colunas = colunasData[index];
+    
+    if (!colunas || colunas.length === 0) {
+        alert('Adicione pelo menos uma coluna');
+        return;
+    }
+    
+    fetch(`/configuracoes/colunas/salvar/${encodeURIComponent(abaName)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ colunas: colunas })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('Colunas salvas com sucesso!');
+        } else {
+            alert('Erro: ' + data.message);
+        }
+    })
+    .catch(error => {
+        alert('Erro ao salvar: ' + error);
+    });
+}
+
+// Carregar colunas da primeira aba ao carregar a página
+document.addEventListener('DOMContentLoaded', function() {
+    const firstTab = document.querySelector('[data-aba-name]');
+    if (firstTab) {
+        carregarColunas(firstTab.dataset.abaName, 1);
+    }
+});
+</script>
+{% endblock %}
